@@ -1,0 +1,130 @@
+' Simple calibration routine for Campbell Scientific Model EC150 
+' Open-path Infrared Gas Analyzer
+'
+' Patrick O'Keeffe <pokeeffe@wsu.edu>
+
+ConstTable
+  Const GAS_1_CO2 = 0 'ppm
+  Const GAS_1_TOL = 0 '%
+  Const GAS_2_CO2 = 0 'ppm
+  Const GAS_2_TOL = 0 '%
+  Const GAS_3_CO2 = 0 'ppm
+  Const GAS_3_TOL = 0 '%
+EndConstTable
+
+'===== WIRING =====
+'EC150+EC100 <----> SDM port
+
+'control ports trigger relays which open solenoid valves
+Const GAS_1_CTRL = 6 'C6
+Const GAS_2_CTRL = 7 'C7
+Const GAS_3_CTRL = 8
+'==================
+
+Public sensor(12)
+Alias sensor(1)  = sonic_Ux 'm/s
+Alias sensor(2)  = sonic_Uy 'm/s
+Alias sensor(3)  = sonic_Uz 'm/s
+Alias sensor(4)  = sonic_Ts '*C
+Alias sensor(5)  = sonic_diag 'bitmap
+Alias sensor(6)  = irga_CO2 'mg/m^3
+Alias sensor(7)  = irga_H2O 'g/m^3
+Alias sensor(8)  = irga_diag 'bitmap
+Alias sensor(9)  = irga_tmpr '*C
+Alias sensor(10) = irga_press 'kPa
+Alias sensor(11) = irga_co2_signal 'ratio, 0-1 nominal
+Alias sensor(12) = irga_h2o_signal '  "           "
+
+Dim co2_mmol_m3, h2o_mmol_m3
+Public co2_ppm
+Public disable_co2
+
+Const WAIT = 0
+Const GAS1 = 1
+Const GAS2 = 2
+Const GAS3 = 3
+Const DONE = 4
+Public state As Long
+Dim status As String
+
+
+DataTable(co2_stats,True,10)
+  DataInterval(0,5,min,2)
+  Average(1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS1)
+    FieldNames("co2_ppm_Avg1")'_(" & GAS_1_CO2 & "ppm)")
+  StdDev (1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS1)
+    FieldNames("co2_ppm_Std1")'_(" & GAS_1_CO2 & "ppm)")
+  Average(1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS2)
+    FieldNames("co2_ppm_Avg2")'_(" & GAS_2_CO2 & "ppm)")
+  StdDev (1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS2)
+    FieldNames("co2_ppm_Std2")'_(" & GAS_2_CO2 & "ppm)")
+  Average(1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS3)
+    FieldNames("co2_ppm_Avg3")'_(" & GAS_3_CO2 & "ppm)")
+  StdDev (1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS3)
+    FieldNames("co2_ppm_Std3")'_(" & GAS_3_CO2 & "ppm)")
+EndTable
+
+
+DisplayMenu("Simple calibrator", -1)
+  DisplayValue("Status", status)
+  DisplayValue("CO2, ppm", co2_ppm)
+  DisplayValue("CO2, mg/m^3", irga_CO2)
+  DisplayValue("H2O, g/m^3", irga_H2O)
+  DisplayValue("tmpr, degC", irga_tmpr)
+  DisplayValue("press, kPa", irga_press)
+EndMenu
+
+
+'Derived by inverting equations in Appendix D of EC150 manual
+'[Gas] = mg/m^3, [H2O] = mmol/m^3, [Tmpr] = C, [Press] = kPa (abs.)
+Function dry_mixing_ratio(Gas, H2O, tmpr, press) As Float 'ppm (umol/mol)
+  Const MW_h2o = 0.01801528 'molar weight of water    g/mmol
+  Const MW_co2 = 44.010     'molar weight of CO2      mg/mmol
+  Const R_ = 8.3144621e-6   'universal gas constant   (kPa m^3)/(K mmol)
+  Dim rhoair 'mmol/m^3 = (kPa)(K mmol/kPa m^3)(1/K)
+  rhoair = press/(R_ * (tmpr + 273.15))
+  'ppm = (umol/mol)(mg/m^3)(mmol/mg) / (mmol/^3 - (g/m^3)(mmol/g))
+  Return Round(10^6 * Gas/MW_co2 / (rhoair - H2O/MW_h2o), 0)
+EndFunction
+
+
+BeginProg
+  status = "Waiting..."
+	Scan (100,mSec,0,0)
+
+    EC100(sensor(1),1,1)
+    co2_ppm = dry_mixing_ratio(irga_CO2, irga_H2O, irga_tmpr, irga_press)
+
+    'aligned to 15 minutes (900 sec):
+    If     (TimeIntoInterval(0,900,sec) AND state=WAIT) Then '0:00
+      state = GAS1
+      status = "Gas #1"
+      disable_co2 = True
+    ElseIf (TimeIntoInterval(60,900,sec) AND state=GAS1) Then  '1:00
+      disable_co2 = False
+    ElseIf (TimeIntoInterval(290,900,sec) AND state=GAS1) Then  '4:50
+      disable_co2 = True
+    ElseIf (TimeIntoInterval(300,900,sec) AND state=GAS1) Then '5:00
+      state = GAS2
+      status = "Gas #2"
+    ElseIf (TimeIntoInterval(360,900,sec) AND state=GAS2) Then '6:00
+      disable_co2 = False
+    ElseIf (TimeIntoInterval(550,900,sec) AND state=GAS2) Then '9:50
+      disable_co2 = True
+    ElseIf (TimeIntoInterval(600,900,sec) AND state=GAS2) Then '10:00
+      state = GAS3
+      status = "Gas #3"
+    ElseIf (TimeIntoInterval(660,990,sec) AND state=GAS3) Then '11:00
+      disable_co2 = False
+    ElseIf (TimeIntoInterval(890,900,sec) AND state=GAS3) Then '14:50
+      disable_co2 = True
+      state = DONE
+    EndIf
+    PortSet(GAS_1_CTRL, state=GAS1)
+    PortSet(GAS_2_CTRL, state=GAS2)
+    PortSet(GAS_3_CTRL, state=GAS3)
+
+		CallTable co2_stats
+	NextScan
+EndProg
+
