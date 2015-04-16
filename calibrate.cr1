@@ -91,6 +91,7 @@ Function dry_mixing_ratio(Gas, H2O, tmpr, press) As Float 'ppm (umol/mol)
   Dim rhoair 'mmol/m^3 = (kPa)(K mmol/kPa m^3)(1/K)
   rhoair = press/(R_ * (tmpr + 273.15))
   'ppm = (umol/mol)(mg/m^3)(mmol/mg) / (mmol/^3 - (g/m^3)(mmol/g))
+  If (H2O < 0) Then H2O = 0
   Return Round(10^6 * Gas/MW_co2 / (rhoair - H2O/MW_h2o), 0)
 EndFunction
 
