@@ -4,9 +4,9 @@
 ' Patrick O'Keeffe <pokeeffe@wsu.edu>
 
 ConstTable
-  Const GAS_1_CO2 = 0 'ppm
+  Const GAS_1_CO2 = 463 'ppm
   Const GAS_1_TOL = 0 '%
-  Const GAS_2_CO2 = 0 'ppm
+  Const GAS_2_CO2 = 360 'ppm
   Const GAS_2_TOL = 0 '%
   Const GAS_3_CO2 = 0 'ppm
   Const GAS_3_TOL = 0 '%
