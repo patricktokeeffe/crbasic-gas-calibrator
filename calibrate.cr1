@@ -50,17 +50,17 @@ Dim status As String
 
 DataTable(co2_stats,True,10)
   DataInterval(0,5,min,2)
-  Average(1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS1)
+  Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS1)
     FieldNames("co2_ppm_Avg1")'_(" & GAS_1_CO2 & "ppm)")
-  StdDev (1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS1)
+  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS1)
     FieldNames("co2_ppm_Std1")'_(" & GAS_1_CO2 & "ppm)")
-  Average(1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS2)
+  Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS2)
     FieldNames("co2_ppm_Avg2")'_(" & GAS_2_CO2 & "ppm)")
-  StdDev (1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS2)
+  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS2)
     FieldNames("co2_ppm_Std2")'_(" & GAS_2_CO2 & "ppm)")
-  Average(1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS3)
+  Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS3)
     FieldNames("co2_ppm_Avg3")'_(" & GAS_3_CO2 & "ppm)")
-  StdDev (1,co2_ppm,IEEE4,disable_co2 OR NOT state=GAS3)
+  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS3)
     FieldNames("co2_ppm_Std3")'_(" & GAS_3_CO2 & "ppm)")
 EndTable
 
