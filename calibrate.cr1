@@ -125,6 +125,10 @@ BeginProg
     PortSet(GAS_3_CTRL, state=GAS3)
 
 		CallTable co2_stats
+		If (state=DONE) Then 
+      WriteIO(&B11100000,&B00000000) 'shut off valves
+      Exit
+    EndIf
 	NextScan
 EndProg
 
