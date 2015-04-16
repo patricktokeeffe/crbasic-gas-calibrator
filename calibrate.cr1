@@ -55,6 +55,7 @@ Alias work_out(6) = co2_ppm_Std3
 Units work_out = ppm
 
 DataTable(work,(state>0 AND NOT disable), 3)
+  DataInterval(0,5,min,3)
   Average(1,co2_ppm,IEEE4,co2_ppm=NAN)
   StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN)
 EndTable
