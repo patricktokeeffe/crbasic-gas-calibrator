@@ -137,8 +137,8 @@ BeginProg
 		CallTable work
 		If (state=DONE) Then
 		  GetRecord(work_out(1),work,3)
-		  GetRecord(work_out(2),work,2)
-		  GetRecord(work_out(3),work,1)
+		  GetRecord(work_out(3),work,2)
+		  GetRecord(work_out(5),work,1)
 
       CallTable stats
 
