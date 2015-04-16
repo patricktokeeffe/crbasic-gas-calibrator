@@ -43,12 +43,12 @@ Const WAIT = 0
 Const GAS1 = 1
 Const GAS2 = 2
 Const GAS3 = 3
-Const DONE = 4
+Const DONE = -1
 Public state As Long
 Dim status As String
 
 
-DataTable(co2_stats,True,10)
+DataTable(co2_stats,(state>0),10)
   DataInterval(0,5,min,2)
   Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS1)
     FieldNames("co2_ppm_Avg1")'_(" & GAS_1_CO2 & "ppm)")
