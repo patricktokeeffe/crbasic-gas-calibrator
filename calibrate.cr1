@@ -34,8 +34,8 @@ Units irga_tmpr = degC
 Units irga_press = kPa
 
 Public co2_ppm
-Public disable_co2
 Units co2_ppm = ppmV
+Public disable
 
 Const WAIT = 0
 Const GAS1 = 1
@@ -45,21 +45,30 @@ Const DONE = -1
 Public state As Long
 Dim status As String
 
+Public work_out(6)
+Alias work_out(1) = co2_ppm_Avg1
+Alias work_out(2) = co2_ppm_Std1
+Alias work_out(3) = co2_ppm_Avg2
+Alias work_out(4) = co2_ppm_Std2
+Alias work_out(5) = co2_ppm_Avg3
+Alias work_out(6) = co2_ppm_Std3
+Units work_out = ppm
 
-DataTable(co2_stats,(state>0),10)
-  DataInterval(0,5,min,2)
-  Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS1)
-    FieldNames("co2_ppm_Avg1")'_(" & GAS_1_CO2 & "ppm)")
-  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS1)
-    FieldNames("co2_ppm_Std1")'_(" & GAS_1_CO2 & "ppm)")
-  Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS2)
-    FieldNames("co2_ppm_Avg2")'_(" & GAS_2_CO2 & "ppm)")
-  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS2)
-    FieldNames("co2_ppm_Std2")'_(" & GAS_2_CO2 & "ppm)")
-  Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS3)
-    FieldNames("co2_ppm_Avg3")'_(" & GAS_3_CO2 & "ppm)")
-  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable_co2 OR NOT state=GAS3)
-    FieldNames("co2_ppm_Std3")'_(" & GAS_3_CO2 & "ppm)")
+DataTable(work,(state>0 AND NOT disable), 3)
+  Average(1,co2_ppm,IEEE4,co2_ppm=NAN)
+  StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN)
+EndTable
+
+DataTable(stats,True,10)
+  Sample(1,GAS_1_CO2,IEEE4)
+    FieldNames("Gas1_conc_ppm")
+  Sample(2,co2_ppm_Avg1,IEEE4)
+  Sample(1,GAS_2_CO2,IEEE4)
+    FieldNames("Gas2_conc_ppm")
+  Sample(2,co2_ppm_Avg2,IEEE4)
+  Sample(1,GAS_3_CO2,IEEE4)
+    FieldNames("Gas3_conc_ppm")
+  Sample(2,co2_ppm_Avg3,IEEE4)
 EndTable
 
 
@@ -97,33 +106,40 @@ BeginProg
     If     (TimeIntoInterval(0,900,sec) AND state=WAIT) Then '0:00
       state = GAS1
       status = "Gas #1"
-      disable_co2 = True
+      disable = True
     ElseIf (TimeIntoInterval(60,900,sec) AND state=GAS1) Then  '1:00
-      disable_co2 = False
+      disable = False
     ElseIf (TimeIntoInterval(290,900,sec) AND state=GAS1) Then  '4:50
-      disable_co2 = True
+      disable = True
     ElseIf (TimeIntoInterval(300,900,sec) AND state=GAS1) Then '5:00
       state = GAS2
       status = "Gas #2"
     ElseIf (TimeIntoInterval(360,900,sec) AND state=GAS2) Then '6:00
-      disable_co2 = False
+      disable = False
     ElseIf (TimeIntoInterval(550,900,sec) AND state=GAS2) Then '9:50
-      disable_co2 = True
+      disable = True
     ElseIf (TimeIntoInterval(600,900,sec) AND state=GAS2) Then '10:00
       state = GAS3
       status = "Gas #3"
     ElseIf (TimeIntoInterval(660,990,sec) AND state=GAS3) Then '11:00
-      disable_co2 = False
+      disable = False
     ElseIf (TimeIntoInterval(890,900,sec) AND state=GAS3) Then '14:50
-      disable_co2 = True
+      disable = True
+    ElseIf (TimeIntoInterval(899,900,sec) AND state=GAS3) Then '14:59
       state = DONE
     EndIf
     PortSet(GAS_1_CTRL, state=GAS1)
     PortSet(GAS_2_CTRL, state=GAS2)
     PortSet(GAS_3_CTRL, state=GAS3)
 
-		CallTable co2_stats
-		If (state=DONE) Then 
+		CallTable work
+		If (state=DONE) Then
+		  GetRecord(work_out(1),work,3)
+		  GetRecord(work_out(2),work,2)
+		  GetRecord(work_out(3),work,1)
+
+      CallTable stats
+
       WriteIO(&B11100000,&B00000000) 'shut off valves
       Exit
     EndIf
