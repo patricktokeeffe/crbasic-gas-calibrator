@@ -22,22 +22,20 @@ Const GAS_3_CTRL = 8
 '==================
 
 Public sensor(12)
-Alias sensor(1)  = sonic_Ux 'm/s
-Alias sensor(2)  = sonic_Uy 'm/s
-Alias sensor(3)  = sonic_Uz 'm/s
-Alias sensor(4)  = sonic_Ts '*C
-Alias sensor(5)  = sonic_diag 'bitmap
-Alias sensor(6)  = irga_CO2 'mg/m^3
-Alias sensor(7)  = irga_H2O 'g/m^3
-Alias sensor(8)  = irga_diag 'bitmap
-Alias sensor(9)  = irga_tmpr '*C
-Alias sensor(10) = irga_press 'kPa
-Alias sensor(11) = irga_co2_signal 'ratio, 0-1 nominal
-Alias sensor(12) = irga_h2o_signal '  "           "
+Alias sensor(6)  = irga_CO2
+Alias sensor(7)  = irga_H2O
+Alias sensor(8)  = irga_diag
+Alias sensor(9)  = irga_tmpr
+Alias sensor(10) = irga_press
+Units irga_CO2 = mg/m^3
+Units irga_H2O = g/m^3
+Units irga_diag = bitmap
+Units irga_tmpr = degC
+Units irga_press = kPa
 
-Dim co2_mmol_m3, h2o_mmol_m3
 Public co2_ppm
 Public disable_co2
+Units co2_ppm = ppmV
 
 Const WAIT = 0
 Const GAS1 = 1
