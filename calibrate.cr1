@@ -135,7 +135,7 @@ BeginProg
     PortSet(GAS_3_CTRL, state=GAS3)
 
 		CallTable work
-		If (state=DONE) Then
+		If (state=DONE AND TimeIntoInterval(0,900,sec)) Then
 		  GetRecord(work_out(1),work,3)
 		  GetRecord(work_out(3),work,2)
 		  GetRecord(work_out(5),work,1)
