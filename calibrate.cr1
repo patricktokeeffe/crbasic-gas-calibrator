@@ -134,13 +134,11 @@ BeginProg
     PortSet(GAS_2_CTRL, state=GAS2)
     PortSet(GAS_3_CTRL, state=GAS3)
 
-		If (state > 0) Then CallTable work
-		
-		If (state=DONE AND TimeIntoInterval(0,900,sec)) Then
+		CallTable work
+		If (state=DONE AND work.Output(1,1)) Then
 		  GetRecord(work_out(1),work,3)
 		  GetRecord(work_out(3),work,2)
 		  GetRecord(work_out(5),work,1)
-
       CallTable stats
 
       WriteIO(&B11100000,&B00000000) 'shut off valves
