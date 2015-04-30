@@ -54,7 +54,7 @@ Alias work_out(5) = co2_ppm_Avg3
 Alias work_out(6) = co2_ppm_Std3
 Units work_out = ppm
 
-DataTable(work,True, 3)
+DataTable(work,True,6)
   DataInterval(0,5,min,3)
   Average(1,co2_ppm,IEEE4,co2_ppm=NAN OR disable)
   StdDev (1,co2_ppm,IEEE4,co2_ppm=NAN OR disable
@@ -72,6 +72,14 @@ DataTable(stats,True,10)
   Sample(2,co2_ppm_Avg3,IEEE4)
 EndTable
 
+DataTable(ts,True,1800)
+  DataInterval(0,1,sec,10)
+  Sample(1,co2_ppm,IEEE4)
+  Sample(1,irga_CO2,IEEE4)
+  Sample(1,irga_H2O,IEEE4)
+  Sample(1,irga_tmpr,IEEE4)
+  Sample(1,irga_press,IEEE4)
+EndTable
 
 DisplayMenu("Simple calibrator", -1)
   DisplayValue("Status", status)
@@ -133,7 +141,8 @@ BeginProg
     PortSet(GAS_1_CTRL, state=GAS1)
     PortSet(GAS_2_CTRL, state=GAS2)
     PortSet(GAS_3_CTRL, state=GAS3)
-
+    
+    If state > 0 Then CallTable ts
 		CallTable work
 		If (state=DONE AND work.Output(1,1)) Then
 		  GetRecord(work_out(1),work,3)
