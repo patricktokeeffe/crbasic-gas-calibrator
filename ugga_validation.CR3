@@ -74,19 +74,20 @@ EndTable
 
 DataTable(stats,run_finished,1000)
   OpenInterval
+  Sample(1,duration,FP2)
   Average(1,ugga_CH4,IEEE4,disable_ugga OR ugga_CH4=NAN)
-  Average(1,ugga_H2O,IEEE4,disable_ugga OR ugga_H2O=NAN)
+  StdDev(1,ugga_CH4,IEEE4,disable_ugga OR ugga_CH4=NAN)
   Average(1,ugga_CO2,IEEE4,disable_ugga OR ugga_CO2=NAN)
+  StdDev(1,ugga_CO2,IEEE4,disable_ugga OR ugga_CO2=NAN)
   Average(1,ugga_CH4_dry,IEEE4,disable_ugga OR ugga_CH4_dry=NAN)
+  StdDev(1,ugga_CH4_dry,IEEE4,disable_ugga OR ugga_CH4_dry=NAN)
   Average(1,ugga_CO2_dry,IEEE4,disable_ugga OR ugga_CO2_dry=NAN)
-'  Average(1,ugga_gas_P,IEEE4,disable_ugga OR ugga_gas_P=NAN)
-'  Average(1,ugga_gas_T,IEEE4,disable_ugga OR ugga_gas_T=NAN)
-'  Average(1,ugga_self_T,IEEE4,disable_ugga OR ugga_self_T=NAN)
-'  Average(1,ugga_ringdown0,IEEE4,disable_ugga OR ugga_ringdown0=NAN)
-'  Average(1,ugga_ringdown1,IEEE4,disable_ugga OR ugga_ringdown1=NAN)
-'  Average(1,ugga_fit_flag,IEEE4,disable_ugga OR ugga_fit_flag=NAN)
+  StdDev(1,ugga_CO2_dry,IEEE4,disable_ugga OR ugga_CO2_dry=NAN)
+  Average(1,ugga_H2O,IEEE4,disable_ugga OR ugga_H2O=NAN)
   Sample(1,run_conc_ch4,IEEE4)
+    FieldNames("reference_CH4_conc")
   Sample(1,run_conc_co2,IEEE4)
+    FieldNames("reference_CO2_conc")
 EndTable
 
 '======================= MENU
@@ -133,9 +134,9 @@ BeginProg
       Else
         'run was just initiated
         Move(run_conc_ch4,2,conc_ch4,2) 'retain values as of start, not end of run
-        duration = Timer(1,Sec,2) 'reset and start
+        duration = Timer(1,Sec,0) 'reset and start
         is_running = True
-        status = "In run"
+        status = "Recording"
       EndIf
     ElseIf (is_running) Then
         'run was just ended
@@ -144,7 +145,8 @@ BeginProg
         run_finished = True
         CallTable(stats)
         run_finished = False
-        status = "Done"
+        duration = Timer(1,Sec,3) 'reset
+        status = "Waiting"
     EndIf
 
 	NextScan
