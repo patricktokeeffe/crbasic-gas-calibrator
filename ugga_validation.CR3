@@ -1,0 +1,152 @@
+' Program to assess calibration of Los Gatos Research UGGA CH4/CO2 instrument
+' Could be trivially adapated to any other gas analyzer
+'
+' Patrick O'Keeffe (c) 2015 
+' Laboratory for Atmospheric Research at Washington State University
+
+
+Const THIS_YEAR = 2015
+
+Const MBAR_PER_TORR = 1.3332237
+
+Const CH4_COM = Com2
+Const CH4_BAUD = 19200
+Const CH4_FMT = 3 '8/n/1
+Const CH4_BUFF = 800
+
+Public disable_ugga As Boolean
+Dim ch4_record As String * 400
+Dim ch4_year
+Dim ch4(25)
+'1: date (only year captured)   '2: time (only hour captured)
+Alias ch4(3)  = ugga_CH4        '4: CH4 s.d.
+Alias ch4(5)  = ugga_H2O        '6: H2O s.d.
+Alias ch4(7)  = ugga_CO2        '8: CO2 s.d.
+Alias ch4(9)  = ugga_CH4_dry    '10: CH4 dry s.d.
+Alias ch4(11) = ugga_CO2_dry    '12: CO2 dry s.d.
+Alias ch4(13) = ugga_gas_P      '14: gas P s.d.
+Alias ch4(15) = ugga_gas_T      '16: gas T s.d.
+Alias ch4(17) = ugga_self_T     '18: self T s.d.
+Alias ch4(19) = ugga_ringdown0  '20: ringdown #0 s.d.
+Alias ch4(21) = ugga_ringdown1  '22: ringdown #1 s.d.
+Alias ch4(23) = ugga_fit_flag   '24: MIU valve
+'25: MIU description
+Units ugga_CH4 = ppm
+Units ugga_H2O = ppm
+Units ugga_CO2 = ppm
+Units ugga_CH4_dry = ppm (dry)
+Units ugga_CO2_dry = ppm (dry)
+Units ugga_gas_P = mbar
+Units ugga_gas_T = degC
+Units ugga_self_T = degC
+Units ugga_ringdown0 = usec
+Units ugga_ringdown1 = usec
+Units ugga_fit_flag = arb
+
+Dim conc(4)
+Alias conc(1) = conc_ch4
+Alias conc(2) = conc_co2
+Alias conc(3) = run_conc_ch4
+Alias conc(4) = run_conc_co2
+Units conc = ppm
+
+Public duration
+Public run_finished As Boolean
+Public run_mode_ON As Boolean
+Public is_running As Boolean
+Public status As String * 16
+
+'================================= TABLES
+DataTable(tsdata,True,10000)
+  DataInterval(0,1,Sec,5)
+  Sample(1,ugga_CH4,IEEE4)
+  Sample(1,ugga_H2O,IEEE4)
+  Sample(1,ugga_CO2,IEEE4)
+  Sample(1,ugga_CH4_dry,IEEE4)
+  Sample(1,ugga_CO2_dry,IEEE4)
+  Sample(1,ugga_gas_P,IEEE4)
+  Sample(1,ugga_gas_T,IEEE4)
+  Sample(1,ugga_self_T,IEEE4)
+  Sample(1,ugga_ringdown0,IEEE4)
+  Sample(1,ugga_ringdown1,IEEE4)
+  Sample(1,ugga_fit_flag,IEEE4)
+EndTable
+
+DataTable(stats,run_finished,1000)
+  OpenInterval
+  Average(1,ugga_CH4,IEEE4,disable_ugga OR ugga_CH4=NAN)
+  Average(1,ugga_H2O,IEEE4,disable_ugga OR ugga_H2O=NAN)
+  Average(1,ugga_CO2,IEEE4,disable_ugga OR ugga_CO2=NAN)
+  Average(1,ugga_CH4_dry,IEEE4,disable_ugga OR ugga_CH4_dry=NAN)
+  Average(1,ugga_CO2_dry,IEEE4,disable_ugga OR ugga_CO2_dry=NAN)
+'  Average(1,ugga_gas_P,IEEE4,disable_ugga OR ugga_gas_P=NAN)
+'  Average(1,ugga_gas_T,IEEE4,disable_ugga OR ugga_gas_T=NAN)
+'  Average(1,ugga_self_T,IEEE4,disable_ugga OR ugga_self_T=NAN)
+'  Average(1,ugga_ringdown0,IEEE4,disable_ugga OR ugga_ringdown0=NAN)
+'  Average(1,ugga_ringdown1,IEEE4,disable_ugga OR ugga_ringdown1=NAN)
+'  Average(1,ugga_fit_flag,IEEE4,disable_ugga OR ugga_fit_flag=NAN)
+  Sample(1,run_conc_ch4,IEEE4)
+  Sample(1,run_conc_co2,IEEE4)
+EndTable
+
+'======================= MENU
+Const Off = False
+Const Recording = True
+DisplayMenu("UGGA Validation",-2)
+  MenuItem("Cal CH4, ppm", conc_ch4)
+  MenuItem("Cal CO2, ppm", conc_co2)
+  MenuItem("Run mode", run_mode_ON)
+    MenuPick(Off, Recording)
+  DisplayValue("Status", status)
+  DisplayValue("Dry CH4, ppb", ugga_CH4_dry)
+  DisplayValue("Dry CO2, ppb", ugga_CO2_dry)
+EndMenu
+
+
+BeginProg
+  SerialOpen(CH4_COM,CH4_BAUD,CH4_FMT,0,CH4_BUFF)
+  status = "Waiting"
+
+	Scan (500,mSec,0,0)
+    SerialIn(ch4_record,CH4_COM,5,&h0A,CH4_BUFF)
+    If (Len(ch4_record)) Then
+      SplitStr(ch4(1),ch4_record,", ",25,6)
+      ch4_year = ch4(1) 'convert string->float
+      'HACK - compare record year with logger timestamp to verify correctly parsed
+      disable_ugga = NOT(ch4_year = THIS_YEAR)
+      ugga_gas_P *= MBAR_PER_TORR
+    ElseIf (ch4_year = NAN) Then
+      'do nothing, UGGA vars already set to NAN
+      disable_ugga = True
+      'SerialFlush(CH4_COM)
+    Else
+      Move(ch4(1),25,NAN,1)
+      ch4_year = NAN
+    EndIf
+    CallTable(tsdata)
+    
+    If (run_mode_ON) Then
+      If (is_running) Then
+        'business as usual during a run
+        duration = Timer(1,Sec,4) 'read only
+        CallTable(stats)
+      Else
+        'run was just initiated
+        Move(run_conc_ch4,2,conc_ch4,2) 'retain values as of start, not end of run
+        duration = Timer(1,Sec,2) 'reset and start
+        is_running = True
+        status = "In run"
+      EndIf
+    ElseIf (is_running) Then
+        'run was just ended
+        duration = Timer(1,Sec,1) 'stop
+        is_running = False
+        run_finished = True
+        CallTable(stats)
+        run_finished = False
+        status = "Done"
+    EndIf
+
+	NextScan
+EndProg
+
