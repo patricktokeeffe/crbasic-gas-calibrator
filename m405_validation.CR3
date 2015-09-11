@@ -1,0 +1,189 @@
+' Program to assess calibration of 2B Technologies Model 405 nm instrument
+' Adapted from `ugga_validation.CR3` and 2015 Indoor Air Quality indoor rack program
+'
+' Patrick O'Keeffe (c) 2015 
+' Laboratory for Atmospheric Research at Washington State University
+
+
+Const NOX_COM = ComRS232
+Const NOX_BAUD = 19200
+Const NOX_FMT = 3 '8/n/1
+Const NOX_REC = 128
+Const NOX_BUFF = 1+2*NOX_REC
+
+Dim disable_nox As Boolean
+Dim nox_record As String * NOX_REC
+Dim nox(22)
+Alias nox(1)  = m405_NO2
+Alias nox(2)  = m405_NO
+Alias nox(3)  = m405_NOx
+Alias nox(4)  = m405_NO2_zero
+Alias nox(5)  = m405_NO_zero
+Alias nox(6)  = m405_flow_factor
+Alias nox(7)  = m405_cell_T
+Alias nox(8)  = m405_cell_P
+Alias nox(9)  = m405_overflow_F
+Alias nox(10) = m405_cell_F
+Alias nox(11) = m405_O3_F
+Alias nox(12) = m405_samp_LED_V
+Alias nox(13) = m405_ref_LED_V
+Alias nox(14) = m405_NO_gen_V
+Alias nox(15) = m405_scrubber_T
+'16: date, day of month    '19: time, hour
+'17: date, month           '20: time, minutes
+'18: date, short year      '21: time, seconds
+Alias nox(22) = m405_status
+Units m405_NO2 = ppb
+Units m405_NO = ppb
+Units m405_NOx = ppb
+Units m405_NO2_zero = ppb
+Units m405_NO_zero = ppb
+Units m405_cell_T = degC
+Units m405_cell_P = mbar
+Units m405_overflow_F = cc/min
+Units m405_cell_F = cc/min
+Units m405_O3_F = cc/min
+Units m405_samp_LED_V = volts
+Units m405_ref_LED_V = volts
+Units m405_NO_gen_V = volts
+Units m405_scrubber_T = degC
+
+Dim run_conc(4)
+Alias run_conc(1) = run_conc_no2
+Alias run_conc(2) = run_tolr_no2
+Alias run_conc(3) = run_conc_no
+Alias run_conc(4) = run_tolr_no
+Units run_conc = ppm
+
+Dim run_finished As Boolean
+Dim is_running As Boolean
+Dim status As String * 16
+Dim run_cylref As String * 32
+Dim run_notes As String * 64
+
+Public run_mode_ON As Boolean
+Public ref_conc(4)
+Alias ref_conc(1) = ref_conc_no2
+Alias ref_conc(2) = ref_tolr_no2
+Alias ref_conc(3) = ref_conc_no
+Alias ref_conc(4) = ref_tolr_no
+Public cylref As String * 32
+Public notes As String * 64
+Units ref_conc = ppm
+
+Public no2_ppb 'for monitoring
+Public no_ppb 'for monitoring
+Public duration
+Units no2_ppb = ppm
+Units no_ppb = ppm
+Units duration = sec
+
+'================================= TABLES
+DataTable(tsdata,True,10000)
+  DataInterval(0,1,Sec,5)
+  Sample(1,duration,IEEE4)
+  Sample(7,nox(1),FP2)
+  Sample(1,nox(8),IEEE4)
+  Sample(3,nox(9),FP2)
+  Sample(2,nox(12),IEEE4)
+  Sample(2,nox(14),FP2)
+  Sample(1,nox(22),UINT2)
+EndTable
+
+DataTable(stats,run_finished,1000)
+  OpenInterval
+  Sample(1,duration,FP2)
+  Average(1,m405_NO2,FP2,disable_nox)
+  StdDev (1,m405_NO2,FP2,disable_nox)
+  Average(1,m405_NO,FP2,disable_nox)
+  StdDev (1,m405_NO,FP2,disable_nox)
+  Average(1,m405_NOx,FP2,disable_nox)
+  StdDev (1,m405_NOx,FP2,disable_nox)
+  Average(1,m405_NO2_zero,FP2,disable_nox)
+  StdDev (1,m405_NO2_zero,FP2,disable_nox)
+  Average(1,m405_NO_zero,FP2,disable_nox)
+  StdDev (1,m405_NO_zero,FP2,disable_nox)
+  Average(2,nox(6),FP2,disable_nox)
+  Average(1,nox(8),IEEE4,disable_nox)
+  Average(3,nox(9),FP2,disable_nox)
+  Average(2,nox(12),IEEE4,disable_nox)
+  Average(2,nox(14),FP2,disable_nox)
+  Sample(1,run_conc_no2,IEEE4)
+    FieldNames("ref_NO2_conc")
+  Sample(1,run_tolr_no2,IEEE4)
+    FieldNames("ref_NO2_tolerance")
+  Sample(1,run_conc_no,IEEE4)
+    FieldNames("ref_NO_conc")
+  Sample(1,run_tolr_no,IEEE4)
+    FieldNames("ref_NO_tolerance")
+  Sample(1,run_cylref,String)
+    FieldNames("ref_cylinder")
+  Sample(1,run_notes,String)
+    FieldNames("notes")
+EndTable
+
+'======================= MENU
+Const Off = False
+Const Recording = True
+DisplayMenu("m405 Validation",-2)
+  SubMenu("Specify gases")
+    MenuItem("NO2 conc, ppm", ref_conc_no2)
+    MenuItem("NO2 tolerance, ppm", ref_tolr_no2)
+    MenuItem("NO conc, ppm", ref_conc_no)
+    MenuItem("NO tolerance, ppm", ref_tolr_no)
+    'MenuItem("Notes", notes)
+  EndSubMenu
+  MenuItem("Run mode", run_mode_ON)
+    MenuPick(Off, Recording)
+  DisplayValue("Status", status)
+  DisplayValue("NO2, ppb", no2_ppb)
+  DisplayValue("NO, ppb", no_ppb)
+EndMenu
+
+
+BeginProg
+  SerialOpen(NOX_COM,NOX_BAUD,NOX_FMT,0,NOX_BUFF)
+  status = "Waiting"
+
+	Scan (500,mSec,0,0)
+    SerialIn(nox_record,NOX_COM,100,&h0D,NOX_REC)
+    If (Len(nox_record)) Then
+      SplitStr(nox(1),nox_record,"",22,0)
+      If (nox(21) = NAN) Then Move(nox(1),21,NAN,1)
+      SerialFlush(NOX_COM)
+      no2_ppb = m405_NO2
+      no_ppb = m405_NO
+    EndIf
+    CallTable(tsdata)
+    
+    If (run_mode_ON) Then
+      If (is_running) Then
+        'business as usual during a run
+        duration = Timer(1,Sec,4) 'read only
+        CallTable(stats)
+      Else
+        'run was just initiated
+        run_conc_no2 = IIF(ref_conc_no2 < 0, NAN, ref_conc_no2)
+        run_tolr_no2 = IIF(ref_conc_no2 < 0 OR ref_tolr_no2 < 0, NAN, ref_tolr_no2)
+        run_conc_no = IIF(ref_conc_no < 0, NAN, ref_conc_no)
+        run_tolr_no = IIF(ref_conc_no < 0 OR ref_tolr_no < 0, NAN, ref_tolr_no)
+        run_notes = notes
+        run_cylref = cylref
+        duration = Timer(1,Sec,0) 'reset and start
+        is_running = True
+        status = "Recording"
+      EndIf
+    ElseIf (is_running) Then
+        'run was just ended
+        duration = Timer(1,Sec,1) 'stop
+        is_running = False
+        run_finished = True
+        CallTable(stats)
+        run_finished = False
+        duration = Timer(1,Sec,3) 'reset
+        status = "Waiting"
+    EndIf
+
+	NextScan
+EndProg
+
