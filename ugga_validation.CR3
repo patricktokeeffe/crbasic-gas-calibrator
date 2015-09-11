@@ -69,6 +69,7 @@ Units duration = sec
 '================================= TABLES
 DataTable(tsdata,True,10000)
   DataInterval(0,1,Sec,5)
+  Sample(1,duration,IEEE4)
   Sample(1,ugga_CH4,IEEE4)
   Sample(1,ugga_H2O,IEEE4)
   Sample(1,ugga_CO2,IEEE4)
