@@ -51,10 +51,12 @@ Units conc = ppm
 Dim run_finished As Boolean
 Dim is_running As Boolean
 Dim status As String * 16
+Dim notes As String * 32
 
 Public run_mode_ON As Boolean
 Public conc_ch4
 Public conc_co2
+Public run_notes As String * 32
 Public ch4_dry
 Public co2_dry
 Public duration
@@ -96,14 +98,18 @@ DataTable(stats,run_finished,1000)
     FieldNames("reference_CH4_conc")
   Sample(1,run_conc_co2,IEEE4)
     FieldNames("reference_CO2_conc")
+  Sample(1,run_notes,String)
 EndTable
 
 '======================= MENU
 Const Off = False
 Const Recording = True
 DisplayMenu("UGGA Validation",-2)
-  MenuItem("Cal CH4, ppm", conc_ch4)
-  MenuItem("Cal CO2, ppm", conc_co2)
+  SubMenu("Specify gases")
+    MenuItem("Cal CH4, ppm", conc_ch4)
+    MenuItem("Cal CO2, ppm", conc_co2)
+    MenuItem("Notes", notes)
+  EndSubMenu
   MenuItem("Run mode", run_mode_ON)
     MenuPick(Off, Recording)
   DisplayValue("Status", status)
@@ -145,6 +151,7 @@ BeginProg
         'run was just initiated
         run_conc_ch4 = conc_ch4
         run_conc_co2 = conc_co2
+        run_notes = Notes
         duration = Timer(1,Sec,0) 'reset and start
         is_running = True
         status = "Recording"
