@@ -4,7 +4,6 @@
 ' Patrick O'Keeffe (c) 2015 
 ' Laboratory for Atmospheric Research at Washington State University
 
-
 Const THIS_YEAR = 2015
 
 Const MBAR_PER_TORR = 1.3332237
@@ -43,25 +42,32 @@ Units ugga_ringdown0 = usec
 Units ugga_ringdown1 = usec
 Units ugga_fit_flag = arb
 
-Dim conc(2)
-Alias conc(1) = run_conc_ch4
-Alias conc(2) = run_conc_co2
-Units conc = ppm
+Dim run_conc(4)
+Alias run_conc(1) = run_conc_ch4
+Alias run_conc(2) = run_tolr_ch4
+Alias run_conc(3) = run_conc_co2
+Alias run_conc(4) = run_tolr_co2
+Units run_conc = ppm
 
 Dim run_finished As Boolean
 Dim is_running As Boolean
 Dim status As String * 16
-Dim notes As String * 32
+Dim run_cylref As String * 32
+Dim run_notes As String * 64
 
 Public run_mode_ON As Boolean
-Public conc_ch4
-Public conc_co2
-Public run_notes As String * 32
-Public ch4_dry
-Public co2_dry
+Public ref_conc(4)
+Alias ref_conc(1) = ref_conc_ch4
+Alias ref_conc(2) = ref_tolr_ch4
+Alias ref_conc(3) = ref_conc_co2
+Alias ref_conc(4) = ref_tolr_co2
+Public cylref As String * 32
+Public notes As String * 64
+Units ref_conc = ppm
+
+Public ch4_dry 'for monitoring
+Public co2_dry 'for monitoring
 Public duration
-Units conc_ch4 = ppm
-Units conc_co2 = ppm
 Units ch4_dry = ppm
 Units co2_dry = ppm
 Units duration = sec
@@ -87,19 +93,26 @@ DataTable(stats,run_finished,1000)
   OpenInterval
   Sample(1,duration,FP2)
   Average(1,ugga_CH4,IEEE4,disable_ugga OR ugga_CH4=NAN)
-  StdDev(1,ugga_CH4,IEEE4,disable_ugga OR ugga_CH4=NAN)
+  StdDev(1,ugga_CH4,FP2,disable_ugga OR ugga_CH4=NAN)
+  Average(1,ugga_CH4_dry,IEEE4,disable_ugga OR ugga_CH4_dry=NAN)
+  StdDev(1,ugga_CH4_dry,FP2,disable_ugga OR ugga_CH4_dry=NAN)
   Average(1,ugga_CO2,IEEE4,disable_ugga OR ugga_CO2=NAN)
   StdDev(1,ugga_CO2,IEEE4,disable_ugga OR ugga_CO2=NAN)
-  Average(1,ugga_CH4_dry,IEEE4,disable_ugga OR ugga_CH4_dry=NAN)
-  StdDev(1,ugga_CH4_dry,IEEE4,disable_ugga OR ugga_CH4_dry=NAN)
   Average(1,ugga_CO2_dry,IEEE4,disable_ugga OR ugga_CO2_dry=NAN)
   StdDev(1,ugga_CO2_dry,IEEE4,disable_ugga OR ugga_CO2_dry=NAN)
   Average(1,ugga_H2O,IEEE4,disable_ugga OR ugga_H2O=NAN)
   Sample(1,run_conc_ch4,IEEE4)
-    FieldNames("reference_CH4_conc")
+    FieldNames("ref_CH4_conc")
+  Sample(1,run_tolr_ch4,IEEE4)
+    FieldNames("ref_CH4_tolerance")
   Sample(1,run_conc_co2,IEEE4)
-    FieldNames("reference_CO2_conc")
+    FieldNames("ref_CO2_conc")
+  Sample(1,run_tolr_co2,IEEE4)
+    FieldNames("ref_CO2_tolerance")
+  Sample(1,run_cylref,String)
+    FieldNames("ref_cylinder")
   Sample(1,run_notes,String)
+    FieldNames("notes")
 EndTable
 
 '======================= MENU
@@ -107,9 +120,11 @@ Const Off = False
 Const Recording = True
 DisplayMenu("UGGA Validation",-2)
   SubMenu("Specify gases")
-    MenuItem("Cal CH4, ppm", conc_ch4)
-    MenuItem("Cal CO2, ppm", conc_co2)
-    MenuItem("Notes", notes)
+    MenuItem("CH4 conc, ppm", ref_conc_ch4)
+    MenuItem("CH4 tolerance, ppm", ref_tolr_ch4)
+    MenuItem("CO2 conc, ppm", ref_conc_co2)
+    MenuItem("CO2 tolerance, ppm", ref_tolr_co2)
+    'MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)
     MenuPick(Off, Recording)
@@ -150,9 +165,12 @@ BeginProg
         CallTable(stats)
       Else
         'run was just initiated
-        run_conc_ch4 = conc_ch4
-        run_conc_co2 = conc_co2
-        run_notes = Notes
+        run_conc_ch4 = IIF(ref_conc_ch4 < 0, NAN, ref_conc_ch4)
+        run_tolr_ch4 = IIF(ref_conc_ch4 < 0 OR ref_tolr_ch4 < 0, NAN, ref_tolr_ch4)
+        run_conc_co2 = IIF(ref_conc_co2 < 0, NAN, ref_conc_co2)
+        run_tolr_co2 = IIF(ref_conc_co2 < 0 OR ref_tolr_co2 < 0, NAN, ref_tolr_co2)
+        run_notes = notes
+        run_cylref = cylref
         duration = Timer(1,Sec,0) 'reset and start
         is_running = True
         status = "Recording"
