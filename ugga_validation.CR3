@@ -14,22 +14,22 @@ Const CH4_BAUD = 19200
 Const CH4_FMT = 3 '8/n/1
 Const CH4_BUFF = 800
 
-Public disable_ugga As Boolean
+Dim disable_ugga As Boolean
 Dim ch4_record As String * 400
 Dim ch4_year
-Dim ch4(25)
+Dim ugga(25)
 '1: date (only year captured)   '2: time (only hour captured)
-Alias ch4(3)  = ugga_CH4        '4: CH4 s.d.
-Alias ch4(5)  = ugga_H2O        '6: H2O s.d.
-Alias ch4(7)  = ugga_CO2        '8: CO2 s.d.
-Alias ch4(9)  = ugga_CH4_dry    '10: CH4 dry s.d.
-Alias ch4(11) = ugga_CO2_dry    '12: CO2 dry s.d.
-Alias ch4(13) = ugga_gas_P      '14: gas P s.d.
-Alias ch4(15) = ugga_gas_T      '16: gas T s.d.
-Alias ch4(17) = ugga_self_T     '18: self T s.d.
-Alias ch4(19) = ugga_ringdown0  '20: ringdown #0 s.d.
-Alias ch4(21) = ugga_ringdown1  '22: ringdown #1 s.d.
-Alias ch4(23) = ugga_fit_flag   '24: MIU valve
+Alias ugga(3)  = ugga_CH4        '4: CH4 s.d.
+Alias ugga(5)  = ugga_H2O        '6: H2O s.d.
+Alias ugga(7)  = ugga_CO2        '8: CO2 s.d.
+Alias ugga(9)  = ugga_CH4_dry    '10: CH4 dry s.d.
+Alias ugga(11) = ugga_CO2_dry    '12: CO2 dry s.d.
+Alias ugga(13) = ugga_gas_P      '14: gas P s.d.
+Alias ugga(15) = ugga_gas_T      '16: gas T s.d.
+Alias ugga(17) = ugga_self_T     '18: self T s.d.
+Alias ugga(19) = ugga_ringdown0  '20: ringdown #0 s.d.
+Alias ugga(21) = ugga_ringdown1  '22: ringdown #1 s.d.
+Alias ugga(23) = ugga_fit_flag   '24: MIU valve
 '25: MIU description
 Units ugga_CH4 = ppm
 Units ugga_H2O = ppm
@@ -43,18 +43,26 @@ Units ugga_ringdown0 = usec
 Units ugga_ringdown1 = usec
 Units ugga_fit_flag = arb
 
-Dim conc(4)
-Alias conc(1) = conc_ch4
-Alias conc(2) = conc_co2
-Alias conc(3) = run_conc_ch4
-Alias conc(4) = run_conc_co2
+Dim conc(2)
+Alias conc(1) = run_conc_ch4
+Alias conc(2) = run_conc_co2
 Units conc = ppm
 
-Public duration
-Public run_finished As Boolean
+Dim run_finished As Boolean
+Dim is_running As Boolean
+Dim status As String * 16
+
 Public run_mode_ON As Boolean
-Public is_running As Boolean
-Public status As String * 16
+Public conc_ch4
+Public conc_co2
+Public ch4_dry
+Public co2_dry
+Public duration
+Units conc_ch4 = ppm
+Units conc_co2 = ppm
+Units ch4_dry = ppm
+Units co2_dry = ppm
+Units duration = sec
 
 '================================= TABLES
 DataTable(tsdata,True,10000)
@@ -111,17 +119,19 @@ BeginProg
 	Scan (500,mSec,0,0)
     SerialIn(ch4_record,CH4_COM,5,&h0A,CH4_BUFF)
     If (Len(ch4_record)) Then
-      SplitStr(ch4(1),ch4_record,", ",25,6)
-      ch4_year = ch4(1) 'convert string->float
+      SplitStr(ugga(1),ch4_record,", ",25,6)
+      ch4_year = ugga(1) 'convert string->float
       'HACK - compare record year with logger timestamp to verify correctly parsed
       disable_ugga = NOT(ch4_year = THIS_YEAR)
       ugga_gas_P *= MBAR_PER_TORR
+      ch4_dry = ugga_CH4_dry
+      co2_dry = ugga_CO2_dry
     ElseIf (ch4_year = NAN) Then
       'do nothing, UGGA vars already set to NAN
       disable_ugga = True
       'SerialFlush(CH4_COM)
     Else
-      Move(ch4(1),25,NAN,1)
+      Move(ugga(1),25,NAN,1)
       ch4_year = NAN
     EndIf
     CallTable(tsdata)
@@ -133,7 +143,8 @@ BeginProg
         CallTable(stats)
       Else
         'run was just initiated
-        Move(run_conc_ch4,2,conc_ch4,2) 'retain values as of start, not end of run
+        run_conc_ch4 = conc_ch4
+        run_conc_co2 = conc_co2
         duration = Timer(1,Sec,0) 'reset and start
         is_running = True
         status = "Recording"
