@@ -4,35 +4,44 @@
 ' Patrick O'Keeffe (c) 2015 
 ' Laboratory for Atmospheric Research at Washington State University
 
+Const SCAN_INTV = 10 'sec
 
-Const NOX_COM = ComRS232
-Const NOX_BAUD = 19200
-Const NOX_FMT = 3 '8/n/1
-Const NOX_REC = 128
-Const NOX_BUFF = 1+2*NOX_REC
+Const TWOB_405_COM = Com1
+Const TWOB_405_BAUD = 19200
+Const TWOB_405_FMT = 3 '8/n/1
+Const TWOB_405_REC = 128
+Const TWOB_405_BUFF = 1+2*TWOB_405_REC
 
-Dim disable_nox As Boolean
-Dim nox_record As String * NOX_REC
-Dim nox(22)
-Alias nox(1)  = m405_NO2
-Alias nox(2)  = m405_NO
-Alias nox(3)  = m405_NOx
-Alias nox(4)  = m405_NO2_zero
-Alias nox(5)  = m405_NO_zero
-Alias nox(6)  = m405_flow_factor
-Alias nox(7)  = m405_cell_T
-Alias nox(8)  = m405_cell_P
-Alias nox(9)  = m405_overflow_F
-Alias nox(10) = m405_cell_F
-Alias nox(11) = m405_O3_F
-Alias nox(12) = m405_samp_LED_V
-Alias nox(13) = m405_ref_LED_V
-Alias nox(14) = m405_NO_gen_V
-Alias nox(15) = m405_scrubber_T
+Const TECO_42C_ADDR = 42 'instrument-specific address
+Const TECO_42C_DELAY = 750 'delay between data queries, mSec (empirical)
+Const TECO_42C_COM = Com3
+Const TECO_42C_BAUD = 9600
+Const TECO_42C_FMT = 3 '8/n/1
+Const TECO_42C_REC = 42 'temperature result is ~41 chars
+Const TECO_42C_BUFF = 1+2*TECO_42C_REC
+
+Dim disable_m405 As Boolean
+Dim twob_record As String * TWOB_405_REC
+Dim twob_405nm(22)
+Alias twob_405nm(1)  = m405_NO2
+Alias twob_405nm(2)  = m405_NO
+Alias twob_405nm(3)  = m405_NOx
+Alias twob_405nm(4)  = m405_NO2_zero
+Alias twob_405nm(5)  = m405_NO_zero
+Alias twob_405nm(6)  = m405_flow_factor
+Alias twob_405nm(7)  = m405_cell_T
+Alias twob_405nm(8)  = m405_cell_P
+Alias twob_405nm(9)  = m405_overflow_F
+Alias twob_405nm(10) = m405_cell_F
+Alias twob_405nm(11) = m405_O3_F
+Alias twob_405nm(12) = m405_samp_LED_V
+Alias twob_405nm(13) = m405_ref_LED_V
+Alias twob_405nm(14) = m405_NO_gen_V
+Alias twob_405nm(15) = m405_scrubber_T
 '16: date, day of month    '19: time, hour
 '17: date, month           '20: time, minutes
 '18: date, short year      '21: time, seconds
-Alias nox(22) = m405_status
+Alias twob_405nm(22) = m405_status
 Units m405_NO2 = ppb
 Units m405_NO = ppb
 Units m405_NOx = ppb
@@ -48,12 +57,26 @@ Units m405_ref_LED_V = volts
 Units m405_NO_gen_V = volts
 Units m405_scrubber_T = degC
 
-Dim run_conc(4)
+Dim disable_42C As Boolean
+Dim teco_record(4) As String * TECO_42C_REC
+Dim teco_bytes
+Dim teco_42C(5)
+Alias teco_42C(1) = m42C_NO2
+Alias teco_42C(2) = m42C_NO
+Alias teco_42C(3) = m42C_NOx
+'Alias teco_42C(4) = tmpr used internally for calculations
+Alias teco_42C(5) = m42C_tmpr
+Units teco_42C = ppb
+Units m42C_tmpr = degC
+
+Dim run_conc(6)
 Alias run_conc(1) = run_conc_no2
 Alias run_conc(2) = run_tolr_no2
 Alias run_conc(3) = run_conc_no
 Alias run_conc(4) = run_tolr_no
-Units run_conc = ppm
+Alias run_conc(5) = run_conc_nox
+Alias run_conc(6) = run_tolr_nox
+Units run_conc = ppb
 
 Dim run_finished As Boolean
 Dim is_running As Boolean
@@ -62,52 +85,58 @@ Dim run_cylref As String * 32
 Dim run_notes As String * 64
 
 Public run_mode_ON As Boolean
-Public ref_conc(4)
+Public ref_conc(6)
 Alias ref_conc(1) = ref_conc_no2
 Alias ref_conc(2) = ref_tolr_no2
 Alias ref_conc(3) = ref_conc_no
 Alias ref_conc(4) = ref_tolr_no
+Alias ref_conc(5) = ref_conc_nox
+Alias ref_conc(6) = ref_tolr_nox
+Units ref_conc = ppb
 Public cylref As String * 32
 Public notes As String * 64
-Units ref_conc = ppm
-
-Public no2_ppb 'for monitoring
-Public no_ppb 'for monitoring
 Public duration
-Units no2_ppb = ppm
-Units no_ppb = ppm
 Units duration = sec
 
 '================================= TABLES
 DataTable(tsdata,True,10000)
-  DataInterval(0,1,Sec,5)
+  DataInterval(0,SCAN_INTV,Sec,5)
   Sample(1,duration,IEEE4)
-  Sample(7,nox(1),FP2)
-  Sample(1,nox(8),IEEE4)
-  Sample(3,nox(9),FP2)
-  Sample(2,nox(12),IEEE4)
-  Sample(2,nox(14),FP2)
-  Sample(1,nox(22),UINT2)
+  Sample(7,twob_405nm(1),FP2)
+  Sample(1,twob_405nm(8),IEEE4)
+  Sample(3,twob_405nm(9),FP2)
+  Sample(2,twob_405nm(12),IEEE4)
+  Sample(2,twob_405nm(14),FP2)
+  Sample(1,twob_405nm(22),UINT2)
+  Sample(3,teco_42C(1),IEEE4)
+  Sample(1,teco_42C(5),IEEE4)
 EndTable
 
 DataTable(stats,run_finished,1000)
   OpenInterval
   Sample(1,duration,FP2)
-  Average(1,m405_NO2,FP2,disable_nox)
-  StdDev (1,m405_NO2,FP2,disable_nox)
-  Average(1,m405_NO,FP2,disable_nox)
-  StdDev (1,m405_NO,FP2,disable_nox)
-  Average(1,m405_NOx,FP2,disable_nox)
-  StdDev (1,m405_NOx,FP2,disable_nox)
-  Average(1,m405_NO2_zero,FP2,disable_nox)
-  StdDev (1,m405_NO2_zero,FP2,disable_nox)
-  Average(1,m405_NO_zero,FP2,disable_nox)
-  StdDev (1,m405_NO_zero,FP2,disable_nox)
-  Average(2,nox(6),FP2,disable_nox)
-  Average(1,nox(8),IEEE4,disable_nox)
-  Average(3,nox(9),FP2,disable_nox)
-  Average(2,nox(12),IEEE4,disable_nox)
-  Average(2,nox(14),FP2,disable_nox)
+  Average(1,m405_NO2,FP2,disable_m405)
+  StdDev (1,m405_NO2,FP2,disable_m405)
+  Average(1,m405_NO,FP2,disable_m405)
+  StdDev (1,m405_NO,FP2,disable_m405)
+  Average(1,m405_NOx,FP2,disable_m405)
+  StdDev (1,m405_NOx,FP2,disable_m405)
+  Average(1,m405_NO2_zero,FP2,disable_m405)
+  StdDev (1,m405_NO2_zero,FP2,disable_m405)
+  Average(1,m405_NO_zero,FP2,disable_m405)
+  StdDev (1,m405_NO_zero,FP2,disable_m405)
+  Average(2,twob_405nm(6),FP2,disable_m405)
+  Average(1,twob_405nm(8),IEEE4,disable_m405)
+  Average(3,twob_405nm(9),FP2,disable_m405)
+  Average(2,twob_405nm(12),IEEE4,disable_m405)
+  Average(2,twob_405nm(14),FP2,disable_m405)
+  Average(1,m42C_NO2,FP2,disable_42C)
+  StdDev (1,m42C_NO2,FP2,disable_42C)
+  Average(1,m42C_NO,FP2,disable_42C)
+  StdDev (1,m42C_NO,FP2,disable_42C)
+  Average(1,m42C_NOx,FP2,disable_42C)
+  StdDev (1,m42C_NOx,FP2,disable_42C)
+  Average(1,m42C_tmpr,FP2,disable_42C)
   Sample(1,run_conc_no2,IEEE4)
     FieldNames("ref_NO2_conc")
   Sample(1,run_tolr_no2,IEEE4)
@@ -116,6 +145,10 @@ DataTable(stats,run_finished,1000)
     FieldNames("ref_NO_conc")
   Sample(1,run_tolr_no,IEEE4)
     FieldNames("ref_NO_tolerance")
+  Sample(1,run_conc_nox,IEEE4)
+    FieldNames("ref_NOx_conc")
+  Sample(1,run_tolr_nox,IEEE4)
+    FieldNames("ref_NOx_tolerance")
   Sample(1,run_cylref,String)
     FieldNames("ref_cylinder")
   Sample(1,run_notes,String)
@@ -127,34 +160,67 @@ Const Off = False
 Const Recording = True
 DisplayMenu("m405 Validation",-2)
   SubMenu("Specify gases")
-    MenuItem("NO2 conc, ppm", ref_conc_no2)
-    MenuItem("NO2 tolerance, ppm", ref_tolr_no2)
-    MenuItem("NO conc, ppm", ref_conc_no)
-    MenuItem("NO tolerance, ppm", ref_tolr_no)
-    'MenuItem("Notes", notes)
+    MenuItem("NO2 conc, ppb", ref_conc_no2)
+    MenuItem("NO2 tolerance, ppb", ref_tolr_no2)
+    MenuItem("NO conc, ppb", ref_conc_no)
+    MenuItem("NO tolerance, ppb", ref_tolr_no)
+    MenuItem("NOx conc, ppb", ref_conc_nox)
+    MenuItem("NOx tolerance, ppb", ref_tolr_nox)
+    MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)
     MenuPick(Off, Recording)
   DisplayValue("Status", status)
-  DisplayValue("NO2, ppb", no2_ppb)
-  DisplayValue("NO, ppb", no_ppb)
+  SubMenu("Monitor data")
+    DisplayValue("2B NO,  ppb", m405_NO)
+    DisplayValue("2B NO2, ppb", m405_NO2)
+    DisplayValue("2B NOx, ppb", m405_NOx)
+    DisplayValue("TECO NO2,  ppb", m42C_NO2)
+    DisplayValue("TECO NO, ppb", m42C_NO)
+    DisplayValue("TECO NOx, ppb", m42C_NOx)
+  EndSubMenu
 EndMenu
 
+Const PREFIX = CHR(128 + TECO_42C_ADDR)
+Const CR = CHR(13) 'carriage return
 
 BeginProg
-  SerialOpen(NOX_COM,NOX_BAUD,NOX_FMT,0,NOX_BUFF)
+  SerialOpen(TWOB_405_COM,TWOB_405_BAUD,TWOB_405_FMT,0,TWOB_405_BUFF)
+  SerialOpen(TECO_42C_COM,TECO_42C_BAUD,TECO_42C_FMT,0,TECO_42C_BUFF)
   status = "Waiting"
 
-	Scan (500,mSec,0,0)
-    SerialIn(nox_record,NOX_COM,100,&h0D,NOX_REC)
-    If (Len(nox_record)) Then
-      SplitStr(nox(1),nox_record,"",22,0)
-      If (nox(21) = NAN) Then Move(nox(1),21,NAN,1)
-      SerialFlush(NOX_COM)
-      no2_ppb = m405_NO2
-      no_ppb = m405_NO
+	Scan (SCAN_INTV,sec,0,0)
+    SerialIn(twob_record,TWOB_405_COM,100,&h0D,TWOB_405_REC)
+    If (Len(twob_record)) Then
+      SplitStr(twob_405nm(1),twob_record,"",22,0)
+      If (twob_405nm(21) = NAN) Then Move(twob_405nm(1),21,NAN,1)
+      SerialFlush(TWOB_405_COM)
     EndIf
+
+    'SerialIn & SerialOut run sequentially from processing task
+    'regardless of program mode (pipeline/sequential)
+    '
+    'Bench tests reveal a delay of at least 300ms be introduced 
+    'between queries to prevent incomplete responses
+    SerialOut(TECO_42C_COM,(PREFIX & "no2" & CR),"",0,0)
+    SerialIn(teco_record(1),TECO_42C_COM,100,&H0d,TECO_42C_REC)
+    Delay(1,TECO_42C_DELAY,mSec)
+    SerialOut(TECO_42C_COM,(PREFIX & "no" & CR),"",0,0)
+    SerialIn(teco_record(2),TECO_42C_COM,100,&H0d,TECO_42C_REC)
+    Delay(1,TECO_42C_DELAY,mSec)   
+    SerialOut(TECO_42C_COM,(PREFIX & "nox" & CR),"",0,0)
+    SerialIn(teco_record(3),TECO_42C_COM,100,&H0d,TECO_42C_REC)
+    Delay(1,TECO_42C_DELAY,mSec)
+    SerialOut(TECO_42C_COM,(PREFIX & "internal temp" & CR),"",0,0)
+    SerialIn(teco_record(4),TECO_42C_COM,100,&H0d,TECO_42C_REC)
+    'Update all values before processing (by ignoring non-numeric chars)
+    SplitStr(m42C_NO2,teco_record(1),"",1,0)
+    SplitStr(m42C_NO,teco_record(2),"",1,0)
+    SplitStr(m42C_NOx,teco_record(3),"",1,0)
+    SplitStr(teco_42C(4),teco_record(4),"",2,0)
+
     CallTable(tsdata)
+    'CallTable(debug)
     
     If (run_mode_ON) Then
       If (is_running) Then
