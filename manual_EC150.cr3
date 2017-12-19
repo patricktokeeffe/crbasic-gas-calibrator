@@ -1,0 +1,183 @@
+' Program to assess calibration of Campbell Scientific EC150
+' Requires manual user input and valve control
+'
+' Patrick O'Keeffe (c) 2017
+' Laboratory for Atmospheric Research at Washington State University
+
+Const SDM_ADDR = 1  'default: 1
+
+Public disable_ec150 As Boolean
+Public irga(12)
+Alias irga(6) = ec150_CO2
+Alias irga(7) = ec150_H2O
+Alias irga(8) = ec150_diag
+Alias irga(9) = ec150_tmpr
+Alias irga(10) = ec150_press
+Units ec150_CO2 = mg/m^3
+Units ec150_H2O = g/m^3
+Units ec150_diag = arb
+Units ec150_tmpr = degC
+Units ec150_press = kPa
+
+Dim e_sat, RH
+Public ec150_Xc
+Public ec150_Xv
+Public ec150_dewpoint
+Units ec150_Xc = ppmv
+Units ec150_Xv = mmol/mol
+Units ec150_dewpoint = C
+
+Dim run_conc(4)
+Alias run_conc(1) = run_conc_co2
+Alias run_conc(2) = run_tolr_co2
+Alias run_conc(3) = run_conc_h2o
+Alias run_conc(4) = run_tolr_h2o
+Units run_conc_co2 = ppmv
+Units run_tolr_co2 = ppmv
+Units run_conc_h2o = degC
+Units run_tolr_h2o = degC
+
+Dim run_finished As Boolean
+Dim is_running As Boolean
+Dim status As String * 16
+Dim run_cylref As String * 32
+Dim run_notes As String * 64
+
+Public run_mode_ON As Boolean
+Public cylref As String * 32
+Public notes As String * 64
+Public ref_conc(4)
+Alias ref_conc(1) = ref_conc_co2
+Alias ref_conc(2) = ref_tolr_co2
+Alias ref_conc(3) = ref_conc_h2o
+Alias ref_conc(4) = ref_tolr_h2o
+Units ref_conc_co2 = ppmv
+Units ref_tolr_co2 = ppmv
+Units ref_conc_h2o = degC
+Units ref_tolr_h2o = degC
+
+Public duration
+Units duration = sec
+
+'================================= TABLES
+DataTable(tsdata,True,10000)
+  DataInterval(0,1,Sec,5)
+  Sample(1,duration,IEEE4)
+  Sample(1,ec150_CO2,IEEE4)
+  Sample(1,ec150_H2O,IEEE4)
+  Sample(1,ec150_tmpr,IEEE4)
+  Sample(1,ec150_press,IEEE4)
+  Sample(1,ec150_diag,IEEE4)
+  Sample(1,ec150_Xc,IEEE4)
+  Sample(1,ec150_Xv,IEEE4)
+  Sample(1,ec150_dewpoint,IEEE4)
+EndTable
+
+DataTable(stats,run_finished,1000)
+  OpenInterval
+  Sample(1,duration,FP2)
+  Average(1,ec150_CO2,IEEE4,disable_ec150 OR ec150_CO2=NAN)
+  StdDev(1,ec150_CO2,FP2,disable_ec150 OR ec150_CO2=NAN)
+  Average(1,ec150_H2O,IEEE4,disable_ec150 OR ec150_H2O=NAN)
+  StdDev(1,ec150_H2O,IEEE4,disable_ec150 OR ec150_H2O=NAN)
+  Sample(1,run_conc_co2,IEEE4)
+    FieldNames("ref_CO2_conc")
+  Sample(1,run_tolr_co2,IEEE4)
+    FieldNames("ref_CO2_tolerance")
+  Sample(1,run_conc_h2o,IEEE4)
+    FieldNames("ref_H2O_conc")
+  Sample(1,run_tolr_h2o,IEEE4)
+    FieldNames("ref_H2O_tolerance")
+  Sample(1,run_cylref,String)
+    FieldNames("ref_cylinder")
+  Sample(1,run_notes,String)
+    FieldNames("notes")
+EndTable
+
+'======================= MENU
+Const Off = False
+Const Recording = True
+DisplayMenu("EC150 Validation",-2)
+  SubMenu("Specify gases")
+    MenuItem("CO2 conc ppm", ref_conc_co2)
+    MenuItem("CO2 tolr ppm", ref_tolr_co2)
+    MenuItem("H2O conc C", ref_conc_h2o)
+    MenuItem("H2O tolr C", ref_tolr_h2o)
+    MenuItem("Notes", notes)
+  EndSubMenu
+  MenuItem("Run mode", run_mode_ON)
+    MenuPick(Off, Recording)
+  DisplayValue("Status", status)
+  DisplayValue("CO2, ppmv", ec150_Xc)
+  DisplayValue("CO2, mg/m^3", ec150_CO2)
+  DisplayValue("H2O, degC", ec150_dewpoint)
+  DisplayValue("H2O, ppthv", ec150_Xv)
+  DisplayValue("H2O, mg/m^3", ec150_H2O)
+EndMenu
+
+
+'Derived by inverting equations in Appendix D of EC150 manual
+'[Gas] = mg/m^3, [H2O] = mmol/m^3, [Tmpr] = C, [Press] = kPa (abs.)
+Function dry_mixing_ratio(Gas, H2O, tmpr, press) As Float 'ppm (umol/mol)
+  Const MW_h2o = 0.01801528 'molar weight of water    g/mmol
+  Const MW_co2 = 44.010     'molar weight of CO2      mg/mmol
+  Const R_ = 8.3144621e-6   'universal gas constant   (kPa m^3)/(K mmol)
+  Dim rhoair 'mmol/m^3 = (kPa)(K mmol/kPa m^3)(1/K)
+  rhoair = press/(R_ * (tmpr + 273.15))
+  'ppm = (umol/mol)(mg/m^3)(mmol/mg) / (mmol/^3 - (g/m^3)(mmol/g))
+  If (H2O < 0) Then H2O = 0
+  Return Round(10^6 * Gas/MW_co2 / (rhoair - H2O/MW_h2o), 1)
+EndFunction
+
+'Eqn B-6 through B-8 in 'Useful equations' appendix of EC150 manual
+'[Xv] = mmol H2O/mol air, [tmpr] = degC, [press] = kPa
+Function dew_point(Xv, tmpr, press) As Float 'degC
+  Dim f, td
+  f = 1.00072 + press*3.2e-5 + press*tmpr*tmpr*5.9e-9
+  td = LN(Xv*press / (0.61121*f*(1000+Xv)))
+  Return Round(240.97*td/(17.502-td), 1)
+EndFunction
+
+
+BeginProg
+  status = "Waiting"
+
+	Scan (100,mSec,0,0)
+	  EC100(irga(1),SDM_ADDR,1)
+	  disable_ec150 = (ec150_diag > 0)
+	  ec150_Xc = dry_mixing_ratio(ec150_CO2, ec150_H2O, ec150_tmpr, ec150_press)
+	  ec150_Xv = dry_mixing_ratio(ec150_H2O, ec150_H2O, ec150_tmpr, ec150_press)
+    ec150_dewpoint = dew_point(ec150_Xv, ec150_tmpr, ec150_press) 
+    CallTable(tsdata)
+    
+    If (run_mode_ON) Then
+      If (is_running) Then
+        'business as usual during a run
+        duration = Timer(1,Sec,4) 'read only
+        CallTable(stats)
+      Else
+        'run was just initiated
+        run_conc_co2 = IIF(ref_conc_co2 < 0, NAN, ref_conc_co2)
+        run_tolr_co2 = IIF(ref_conc_co2 < 0 OR ref_tolr_co2 < 0, NAN, ref_tolr_co2)
+        run_conc_h2o = IIF(ref_conc_h2o < 0, NAN, ref_conc_h2o)
+        run_tolr_h2o = IIF(ref_conc_h2o < 0 OR ref_tolr_h2o < 0, NAN, ref_tolr_h2o)
+        run_notes = notes
+        run_cylref = cylref
+        duration = Timer(1,Sec,0) 'reset and start
+        is_running = True
+        status = "Recording"
+      EndIf
+    ElseIf (is_running) Then
+        'run was just ended
+        duration = Timer(1,Sec,1) 'stop
+        is_running = False
+        run_finished = True
+        CallTable(stats)
+        run_finished = False
+        duration = Timer(1,Sec,3) 'reset
+        status = "Waiting"
+    EndIf
+
+	NextScan
+EndProg
+
