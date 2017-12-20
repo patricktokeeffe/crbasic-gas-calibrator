@@ -96,10 +96,12 @@ BeginProg
 	Scan (SCAN_INTV,sec,0,0)
     SerialIn(o3_record,O3_COM,100,&h0D,O3_REC)
     If (Len(o3_record)) Then
+      disable_m205 = False
       SplitStr(o3(1),o3_record,"",9,0)
       'HACK: naive sanity check on data parsing
       If (o3(9)=NAN OR m205_cell_P < 700 OR m205_cell_P > 1300) Then
         Move(o3(1),9,NAN,1)
+        disable_m205 = True
       EndIf
       SerialFlush(O3_COM)
     EndIf
