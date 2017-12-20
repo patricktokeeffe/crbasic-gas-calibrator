@@ -12,19 +12,6 @@ Const O3_FMT = 3 '8/n/1
 Const O3_REC = 80
 Const O3_BUFF = 1+2*O3_REC
 
-Dim disable_m205 As Boolean
-Dim o3_record As String * O3_REC
-Dim o3(9)
-Alias o3(1) = m205_O3
-Alias o3(2) = m205_cell_T
-Alias o3(3) = m205_cell_P
-'4: date, day of month    '7: time, hour
-'5: date, month           '8: time, minute
-'6: date, short year      '9: time, second
-Units m205_O3 = ppbv
-Units m205_cell_T = degC
-Units m205_cell_P = mbar
-
 Dim run_conc(2)
 Alias run_conc(1) = run_conc_o3
 Alias run_conc(2) = run_tolr_o3
@@ -45,6 +32,19 @@ Public cylref As String * 32
 Public notes As String * 64
 Public duration
 Units duration = sec
+
+Dim disable_m205 As Boolean
+Dim o3_record As String * O3_REC
+Public o3(9)
+Alias o3(1) = m205_O3
+Alias o3(2) = m205_cell_T
+Alias o3(3) = m205_cell_P
+'4: date, day of month    '7: time, hour
+'5: date, month           '8: time, minute
+'6: date, short year      '9: time, second
+Units m205_O3 = ppbv
+Units m205_cell_T = degC
+Units m205_cell_P = mbar
 
 '================================= TABLES
 DataTable(tsdata,True,10000)
