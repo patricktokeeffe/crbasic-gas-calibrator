@@ -20,7 +20,7 @@ Units run_conc = ppb
 Dim run_finished As Boolean
 Dim is_running As Boolean
 Dim status As String * 16
-Dim run_cylref As String * 32
+Dim run_source As String * 64
 Dim run_notes As String * 64
 
 Public run_mode_ON As Boolean
@@ -28,7 +28,7 @@ Public ref_conc(2)
 Alias ref_conc(1) = ref_conc_o3
 Alias ref_conc(2) = ref_tolr_o3
 Units ref_conc = ppb
-Public cylref As String * 32
+Public source As String * 64
 Public notes As String * 64
 Public duration
 Units duration = sec
@@ -67,8 +67,8 @@ DataTable(stats,run_finished,1000)
     FieldNames("ref_O3_conc")
   Sample(1,run_tolr_o3,IEEE4)
     FieldNames("ref_O3_tolerance")
-  Sample(1,run_cylref,String)
-    FieldNames("ref_cylinder")
+  Sample(1,run_source,String)
+    FieldNames("ref_source")
   Sample(1,run_notes,String)
     FieldNames("notes")
 EndTable
@@ -80,6 +80,7 @@ DisplayMenu("m205 Validation",-2)
   SubMenu("Specify O3 source")
     MenuItem("O3 conc, ppb", ref_conc_o3)
     MenuItem("O3 tolerance, ppb", ref_tolr_o3)
+    MenuItem("Source", source)
     MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)
@@ -118,7 +119,7 @@ BeginProg
         run_conc_o3 = IIF(ref_conc_o3 < 0, NAN, ref_conc_o3)
         run_tolr_o3 = IIF(ref_conc_o3 < 0 OR ref_tolr_o3 < 0, NAN, ref_tolr_o3)
         run_notes = notes
-        run_cylref = cylref
+        run_source = source
         duration = Timer(1,Sec,0) 'reset and start
         is_running = True
         status = "Recording"

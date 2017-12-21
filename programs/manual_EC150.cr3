@@ -40,11 +40,11 @@ Units run_tolr_h2o = degC
 Dim run_finished As Boolean
 Dim is_running As Boolean
 Dim status As String * 16
-Dim run_cylref As String * 32
+Dim run_source As String * 64
 Dim run_notes As String * 64
 
 Public run_mode_ON As Boolean
-Public cylref As String * 32
+Public source As String * 64
 Public notes As String * 64
 Public ref_conc(4)
 Alias ref_conc(1) = ref_conc_co2
@@ -88,8 +88,8 @@ DataTable(stats,run_finished,1000)
     FieldNames("ref_H2O_conc")
   Sample(1,run_tolr_h2o,IEEE4)
     FieldNames("ref_H2O_tolerance")
-  Sample(1,run_cylref,String)
-    FieldNames("ref_cylinder")
+  Sample(1,run_source,String)
+    FieldNames("ref_source")
   Sample(1,run_notes,String)
     FieldNames("notes")
 EndTable
@@ -103,6 +103,7 @@ DisplayMenu("EC150 Validation",-2)
     MenuItem("CO2 tolr ppm", ref_tolr_co2)
     MenuItem("H2O conc C", ref_conc_h2o)
     MenuItem("H2O tolr C", ref_tolr_h2o)
+    MenuItem("Source", source)
     MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)
@@ -162,7 +163,7 @@ BeginProg
         run_conc_h2o = IIF(ref_conc_h2o < 0, NAN, ref_conc_h2o)
         run_tolr_h2o = IIF(ref_conc_h2o < 0 OR ref_tolr_h2o < 0, NAN, ref_tolr_h2o)
         run_notes = notes
-        run_cylref = cylref
+        run_source = source
         duration = Timer(1,Sec,0) 'reset and start
         is_running = True
         status = "Recording"
