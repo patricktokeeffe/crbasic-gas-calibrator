@@ -4,9 +4,10 @@
 ' Laboratory for Atmospheric Research
 ' Washington State University
 
-Const SCAN_INTV = 10 'sec
+'HINT: per SOP, set analyzer to fast (20s) data output
+Const SCAN_INTV = 20 'sec 
 
-Const TWOB_405_COM = ComU3
+Const TWOB_405_COM = ComU3 '& U6
 Const TWOB_405_BAUD = 19200
 Const TWOB_405_FMT = 3 '8/n/1
 Const TWOB_405_REC = 128
