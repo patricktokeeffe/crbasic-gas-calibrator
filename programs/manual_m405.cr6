@@ -13,9 +13,38 @@ Const TWOB_405_FMT = 3 '8/n/1
 Const TWOB_405_REC = 128
 Const TWOB_405_BUFF = 1+2*TWOB_405_REC
 
+Dim run_conc(6)
+Alias run_conc(1) = run_conc_no2
+Alias run_conc(2) = run_tolr_no2
+Alias run_conc(3) = run_conc_no
+Alias run_conc(4) = run_tolr_no
+Alias run_conc(5) = run_conc_nox
+Alias run_conc(6) = run_tolr_nox
+Units run_conc = ppb
+
+Dim run_finished As Boolean
+Dim is_running As Boolean
+Dim status As String * 16
+Dim run_cylref As String * 32
+Dim run_notes As String * 64
+
+Public run_mode_ON As Boolean
+Public ref_conc(6)
+Alias ref_conc(1) = ref_conc_no2
+Alias ref_conc(2) = ref_tolr_no2
+Alias ref_conc(3) = ref_conc_no
+Alias ref_conc(4) = ref_tolr_no
+Alias ref_conc(5) = ref_conc_nox
+Alias ref_conc(6) = ref_tolr_nox
+Units ref_conc = ppb
+Public cylref As String * 32
+Public notes As String * 64
+Public duration
+Units duration = sec
+
 Dim disable_m405 As Boolean
 Dim twob_record As String * TWOB_405_REC
-Dim twob_405nm(22)
+Public twob_405nm(22)
 Alias twob_405nm(1)  = m405_NO2
 Alias twob_405nm(2)  = m405_NO
 Alias twob_405nm(3)  = m405_NOx
@@ -50,34 +79,6 @@ Units m405_ref_LED_V = volts
 Units m405_NO_gen_V = volts
 Units m405_scrubber_T = degC
 
-Dim run_conc(6)
-Alias run_conc(1) = run_conc_no2
-Alias run_conc(2) = run_tolr_no2
-Alias run_conc(3) = run_conc_no
-Alias run_conc(4) = run_tolr_no
-Alias run_conc(5) = run_conc_nox
-Alias run_conc(6) = run_tolr_nox
-Units run_conc = ppb
-
-Dim run_finished As Boolean
-Dim is_running As Boolean
-Dim status As String * 16
-Dim run_cylref As String * 32
-Dim run_notes As String * 64
-
-Public run_mode_ON As Boolean
-Public ref_conc(6)
-Alias ref_conc(1) = ref_conc_no2
-Alias ref_conc(2) = ref_tolr_no2
-Alias ref_conc(3) = ref_conc_no
-Alias ref_conc(4) = ref_tolr_no
-Alias ref_conc(5) = ref_conc_nox
-Alias ref_conc(6) = ref_tolr_nox
-Units ref_conc = ppb
-Public cylref As String * 32
-Public notes As String * 64
-Public duration
-Units duration = sec
 
 '================================= TABLES
 DataTable(tsdata,True,10000)
@@ -162,7 +163,6 @@ BeginProg
     EndIf
 
     CallTable(tsdata)
-    'CallTable(debug)
     
     If (run_mode_ON) Then
       If (is_running) Then
