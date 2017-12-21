@@ -34,6 +34,10 @@ For a Campbell Scientific EC150 open-path CO2/H2O gas analyzer.
 
 For assessment of a 2B Technologies model 205 dual beam ozone monitor using a CR6.
 
+#### `manual_m405.cr6`
+
+For assessment of a 2B Technologies model 405 nm NOx box using a CR6.
+
 #### `manual_m405_42C.cr3`
 
 For simultaneous assessment of a 2B Technologies model 405 nm and a Themo
