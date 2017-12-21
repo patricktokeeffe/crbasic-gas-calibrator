@@ -1,0 +1,139 @@
+' Program to assess calibration of 2B Technologies Model 205 instrument
+'
+' Patrick O'Keeffe (c) 2017
+' Laboratory for Atmospheric Research
+' Washington State University
+
+Const SCAN_INTV = 2 'sec
+
+Const O3_COM = ComU5 '& U6
+Const O3_BAUD = 19200
+Const O3_FMT = 3 '8/n/1
+Const O3_REC = 80
+Const O3_BUFF = 1+2*O3_REC
+
+Dim run_conc(2)
+Alias run_conc(1) = run_conc_o3
+Alias run_conc(2) = run_tolr_o3
+Units run_conc = ppb
+
+Dim run_finished As Boolean
+Dim is_running As Boolean
+Dim status As String * 16
+Dim run_cylref As String * 32
+Dim run_notes As String * 64
+
+Public run_mode_ON As Boolean
+Public ref_conc(2)
+Alias ref_conc(1) = ref_conc_o3
+Alias ref_conc(2) = ref_tolr_o3
+Units ref_conc = ppb
+Public cylref As String * 32
+Public notes As String * 64
+Public duration
+Units duration = sec
+
+Dim disable_m205 As Boolean
+Dim o3_record As String * O3_REC
+Public o3(9)
+Alias o3(1) = m205_O3
+Alias o3(2) = m205_cell_T
+Alias o3(3) = m205_cell_P
+'4: date, day of month    '7: time, hour
+'5: date, month           '8: time, minute
+'6: date, short year      '9: time, second
+Units m205_O3 = ppbv
+Units m205_cell_T = degC
+Units m205_cell_P = mbar
+
+'================================= TABLES
+DataTable(tsdata,True,10000)
+  DataInterval(0,SCAN_INTV,Sec,5)
+  Sample(1,duration,IEEE4)
+  Sample(2,o3(1),FP2)
+  Sample(1,o3(3),IEEE4)
+EndTable
+
+DataTable(stats,run_finished,1000)
+  OpenInterval
+  Sample(1,duration,FP2)
+  Average(1,m205_O3,FP2,disable_m205)
+  StdDev (1,m205_O3,FP2,disable_m205)
+  Average(1,m205_cell_T,FP2,disable_m205)
+  StdDev (1,m205_cell_T,FP2,disable_m205)
+  Average(1,m205_cell_P,IEEE4,disable_m205)
+  StdDev (1,m205_cell_P,FP2,disable_m205)
+  Sample(1,run_conc_o3,IEEE4)
+    FieldNames("ref_O3_conc")
+  Sample(1,run_tolr_o3,IEEE4)
+    FieldNames("ref_O3_tolerance")
+  Sample(1,run_cylref,String)
+    FieldNames("ref_cylinder")
+  Sample(1,run_notes,String)
+    FieldNames("notes")
+EndTable
+
+'======================= MENU
+Const Off = False
+Const Recording = True
+DisplayMenu("m205 Validation",-2)
+  SubMenu("Specify O3 source")
+    MenuItem("O3 conc, ppb", ref_conc_o3)
+    MenuItem("O3 tolerance, ppb", ref_tolr_o3)
+    MenuItem("Notes", notes)
+  EndSubMenu
+  MenuItem("Run mode", run_mode_ON)
+    MenuPick(Off, Recording)
+  DisplayValue("Status", status)
+  DisplayValue("ozone,  ppb", m205_O3)
+EndMenu
+
+
+BeginProg
+  SerialOpen(O3_COM,O3_BAUD,O3_FMT,0,O3_BUFF)
+  status = "Waiting"
+
+	Scan (SCAN_INTV,sec,0,0)
+    SerialIn(o3_record,O3_COM,100,&h0D,O3_REC)
+    If (Len(o3_record)) Then
+      disable_m205 = False
+      SplitStr(o3(1),o3_record,"",9,0)
+      'HACK: naive sanity check on data parsing
+      If (o3(9)=NAN OR m205_cell_P < 700 OR m205_cell_P > 1300) Then
+        Move(o3(1),9,NAN,1)
+        disable_m205 = True
+      EndIf
+      SerialFlush(O3_COM)
+    EndIf
+
+    CallTable(tsdata)
+    
+    If (run_mode_ON) Then
+      If (is_running) Then
+        'business as usual during a run
+        duration = Timer(1,Sec,4) 'read only
+        CallTable(stats)
+      Else
+        'run was just initiated
+        run_conc_o3 = IIF(ref_conc_o3 < 0, NAN, ref_conc_o3)
+        run_tolr_o3 = IIF(ref_conc_o3 < 0 OR ref_tolr_o3 < 0, NAN, ref_tolr_o3)
+        run_notes = notes
+        run_cylref = cylref
+        duration = Timer(1,Sec,0) 'reset and start
+        is_running = True
+        status = "Recording"
+      EndIf
+    ElseIf (is_running) Then
+        'run was just ended
+        duration = Timer(1,Sec,1) 'stop
+        is_running = False
+        run_finished = True
+        CallTable(stats)
+        run_finished = False
+        duration = Timer(1,Sec,3) 'reset
+        status = "Waiting"
+    EndIf
+
+	NextScan
+EndProg
+
