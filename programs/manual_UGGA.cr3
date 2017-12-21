@@ -52,7 +52,7 @@ Units run_conc = ppm
 Dim run_finished As Boolean
 Dim is_running As Boolean
 Dim status As String * 16
-Dim run_cylref As String * 32
+Dim run_source As String * 64
 Dim run_notes As String * 64
 
 Public run_mode_ON As Boolean
@@ -61,7 +61,7 @@ Alias ref_conc(1) = ref_conc_ch4
 Alias ref_conc(2) = ref_tolr_ch4
 Alias ref_conc(3) = ref_conc_co2
 Alias ref_conc(4) = ref_tolr_co2
-Public cylref As String * 32
+Public source As String * 64
 Public notes As String * 64
 Units ref_conc = ppm
 
@@ -109,8 +109,8 @@ DataTable(stats,run_finished,1000)
     FieldNames("ref_CO2_conc")
   Sample(1,run_tolr_co2,IEEE4)
     FieldNames("ref_CO2_tolerance")
-  Sample(1,run_cylref,String)
-    FieldNames("ref_cylinder")
+  Sample(1,run_source,String)
+    FieldNames("ref_source")
   Sample(1,run_notes,String)
     FieldNames("notes")
 EndTable
@@ -124,7 +124,7 @@ DisplayMenu("UGGA Validation",-2)
     MenuItem("CH4 tolerance, ppm", ref_tolr_ch4)
     MenuItem("CO2 conc, ppm", ref_conc_co2)
     MenuItem("CO2 tolerance, ppm", ref_tolr_co2)
-    'MenuItem("Notes", notes)
+    MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)
     MenuPick(Off, Recording)
@@ -170,7 +170,7 @@ BeginProg
         run_conc_co2 = IIF(ref_conc_co2 < 0, NAN, ref_conc_co2)
         run_tolr_co2 = IIF(ref_conc_co2 < 0 OR ref_tolr_co2 < 0, NAN, ref_tolr_co2)
         run_notes = notes
-        run_cylref = cylref
+        run_source = source
         duration = Timer(1,Sec,0) 'reset and start
         is_running = True
         status = "Recording"
