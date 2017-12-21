@@ -80,6 +80,7 @@ DisplayMenu("m205 Validation",-2)
   SubMenu("Specify O3 source")
     MenuItem("O3 conc, ppb", ref_conc_o3)
     MenuItem("O3 tolerance, ppb", ref_tolr_o3)
+    MenuItem("Source", source)
     MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)

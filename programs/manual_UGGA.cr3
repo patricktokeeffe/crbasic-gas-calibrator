@@ -124,6 +124,7 @@ DisplayMenu("UGGA Validation",-2)
     MenuItem("CH4 tolerance, ppm", ref_tolr_ch4)
     MenuItem("CO2 conc, ppm", ref_conc_co2)
     MenuItem("CO2 tolerance, ppm", ref_tolr_co2)
+    MenuItem("Source", source)
     MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)

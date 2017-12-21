@@ -166,6 +166,7 @@ DisplayMenu("m405 Validation",-2)
     MenuItem("NO tolerance, ppb", ref_tolr_no)
     MenuItem("NOx conc, ppb", ref_conc_nox)
     MenuItem("NOx tolerance, ppb", ref_tolr_nox)
+    MenuItem("Source", source)
     MenuItem("Notes", notes)
   EndSubMenu
   MenuItem("Run mode", run_mode_ON)
